@@ -6,6 +6,8 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/main
 
   db:
     image: postgres:16
