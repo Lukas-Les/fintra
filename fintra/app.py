@@ -6,11 +6,14 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/main")
+
 
 async def connect_to_db() -> psycopg.AsyncConnection:
     """Create a new async database connection."""
     return await psycopg.AsyncConnection.connect(DATABASE_URL)
+
 
 async def health_check(request):
     try:
@@ -23,8 +26,14 @@ async def health_check(request):
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
+
+async def create_user() -> None:
+    pass
+
+
 routes = [
     Route("/health", endpoint=health_check)
 ]
+
 
 app = Starlette(debug=True, routes=routes)
