@@ -7,7 +7,9 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/main")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://user:pass@localhost:5432/postgres"
+)
 
 
 async def connect_to_db() -> psycopg.AsyncConnection:
@@ -22,7 +24,9 @@ async def health_check(request):
                 await cur.execute("SELECT 1;")
                 result = await cur.fetchone()  # Fetch to ensure the query works
 
-        return JSONResponse({"status": "ok", "message": "Database connected", "result": result})
+        return JSONResponse(
+            {"status": "ok", "message": "Database connected", "result": result}
+        )
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
@@ -31,9 +35,7 @@ async def create_user() -> None:
     pass
 
 
-routes = [
-    Route("/health", endpoint=health_check)
-]
+routes = [Route("/health", endpoint=health_check)]
 
 
 app = Starlette(debug=True, routes=routes)
