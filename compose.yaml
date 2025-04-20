@@ -1,26 +1,18 @@
-services:
-  app:
-    build: .
-    container_name: starlette_app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-    environment:
-      DATABASE_URL: postgresql://user:pass@db:5432/main
+version: v2.34.0
 
+name: fintra
+
+services:
   db:
-    image: postgres:16
-    container_name: starlette_db
-    restart: no
+    image: postgres:15
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: main
+    volumes:
+      - db:/var/lib/postgresql/data 
     ports:
       - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      
+
 volumes:
-  pgdata:
+ 

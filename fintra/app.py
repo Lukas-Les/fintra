@@ -1,41 +1,129 @@
-import os
-import psycopg
+import enum
+import hashlib
+import json
 
-from psycopg.rows import dict_row
+from typing import Any
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy.types import Double
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, HTMLResponse
+from starlette.requests import Request
 from starlette.routing import Route
+from starlette.schemas import SchemaGenerator
+
+from fintra import db
 
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://user:pass@localhost:5432/postgres"
+schemas = SchemaGenerator(
+    {"openapi": "3.0.0", "info": {"title": "Example API", "version": "1.0"}}
 )
 
+class TransactionType(enum.Enum):
+    EXPENSE = "expense"
+    INCOME = "income"
 
-async def connect_to_db() -> psycopg.AsyncConnection:
-    """Create a new async database connection."""
-    return await psycopg.AsyncConnection.connect(DATABASE_URL)
+@dataclass
+class Transaction:
+    amount: Double
+    type: TransactionType
+    category: str
+    description: str
+    party: str
+    date: datetime
+
+    @classmethod
+    def from_request_body(cls, body: bytes):
+        body_json = json.loads(body.decode())       
+        return cls(
+            amount=body_json.get("amount"),
+            type=body_json.get("type"),
+            category=body_json.get("category"),
+            description=body_json.get("description"),
+            party=body_json.get("party"),
+            date=body_json.get("date") or datetime.now(),
+        )
+
+    def lock_key(self) -> int:
+        s = str(self.amount) + str(self.type) + self.party + self.date.isoformat()
+        h = hashlib.sha256(s.encode()).digest()
+        return int.from_bytes(h[:8], byteorder="big", signed=True)
+    
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "amount": self.amount,
+            "type": self.type,
+            "category": self.category,
+            "description": self.description,
+            "party": self.party,
+            "date": self.date,
+        }
 
 
-async def health_check(request):
-    try:
-        async with await connect_to_db() as conn:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute("SELECT 1;")
-                result = await cur.fetchone()  # Fetch to ensure the query works
+async def health_check(request: Request):
+    conn = await db.create_or_return_connection()
+    async with conn.cursor() as cursor:
+        await cursor.execute("SELECT 1;")
+        result = await cursor.fetchone()  # Fetch to ensure the query works
 
         return JSONResponse(
             {"status": "ok", "message": "Database connected", "result": result}
         )
-    except Exception as e:
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
-async def create_user() -> None:
-    pass
+async def transaction(request: Request) -> JSONResponse:
+    transaction = Transaction.from_request_body(await request.body())
+    if request.method == "POST":
+        conn = await db.create_or_return_connection()
+        async with conn.cursor() as cursor:
+            query ="""
+                INSERT INTO transactions (amount, type, category, description, party, date)
+                VALUES (%(amount)s, %(type)s, %(category)s, %(description)s, %(party)s, %(date)s);
+            """
+            await cursor.execute(query, params=transaction.as_dict())
+            response_obj = {"result": "transaction pushed"}
+        return JSONResponse(content=json.dumps(response_obj))
+    else:
+        response_obj = {"result": "only post implemented"}
+        return JSONResponse(content=json.dumps(response_obj))
 
 
-routes = [Route("/health", endpoint=health_check)]
+def openapi_schema(request):
+    return schemas.OpenAPIResponse(request=request)
 
+
+async def swagger_ui(request: Request):
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Financial Transaction API</title>
+        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@3/swagger-ui.css">
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
+        <script>
+            SwaggerUIBundle({
+                url: "/docs",
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset
+                ]
+            })
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
+
+routes = [
+    Route("/health", endpoint=health_check, methods=["GET"]),
+    Route("/docs", endpoint=openapi_schema, methods=["GET"]),
+    Route("/transaction", endpoint=transaction, methods=["POST"]),
+]
 
 app = Starlette(debug=True, routes=routes)
