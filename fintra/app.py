@@ -1,5 +1,4 @@
 import enum
-import hashlib
 import json
 
 from typing import Any
@@ -9,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy.types import Double
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, HTMLResponse
+from starlette.responses import JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
 from starlette.schemas import SchemaGenerator
@@ -37,24 +36,23 @@ class Transaction:
     @classmethod
     def from_request_body(cls, body: bytes):
         body_json = json.loads(body.decode())       
+        if body_json.get("type") == "expense":
+            _type = TransactionType.EXPENSE
+        else:
+            _type = TransactionType.INCOME
         return cls(
             amount=body_json.get("amount"),
-            type=body_json.get("type"),
+            type=_type,
             category=body_json.get("category"),
             description=body_json.get("description"),
             party=body_json.get("party"),
             date=body_json.get("date") or datetime.now(),
         )
 
-    def lock_key(self) -> int:
-        s = str(self.amount) + str(self.type) + self.party + self.date.isoformat()
-        h = hashlib.sha256(s.encode()).digest()
-        return int.from_bytes(h[:8], byteorder="big", signed=True)
-    
     def as_dict(self) -> dict[str, Any]:
         return {
             "amount": self.amount,
-            "type": self.type,
+            "type": self.type.value,
             "category": self.category,
             "description": self.description,
             "party": self.party,
@@ -93,32 +91,6 @@ async def transaction(request: Request) -> JSONResponse:
 def openapi_schema(request):
     return schemas.OpenAPIResponse(request=request)
 
-
-async def swagger_ui(request: Request):
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Financial Transaction API</title>
-        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@3/swagger-ui.css">
-    </head>
-    <body>
-        <div id="swagger-ui"></div>
-        <script src="https://unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
-        <script>
-            SwaggerUIBundle({
-                url: "/docs",
-                dom_id: '#swagger-ui',
-                presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIBundle.SwaggerUIStandalonePreset
-                ]
-            })
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(html)
 
 routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
