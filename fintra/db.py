@@ -8,9 +8,7 @@ from psycopg.rows import TupleRow
 
 from psycopg import AsyncConnection, AsyncCursor
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://user:pass@localhost:5432/main"
-)
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 # TODO: implement a connection pool
 _connection: AsyncConnection | None = None
@@ -25,15 +23,17 @@ async def create_or_return_connection() -> psycopg.AsyncConnection:
     global _connection
     if _connection is None or _connection.closed:
         _connection = await _create_connection()
-    return _connection 
+    return _connection
 
 
 @asynccontextmanager
-async def connect_with_lock(lock_key: int) -> AsyncGenerator[AsyncCursor[TupleRow], None]:
+async def connect_with_lock(
+    lock_key: int,
+) -> AsyncGenerator[AsyncCursor[TupleRow], None]:
     conn = await create_or_return_connection()
     async with conn.cursor() as cursor:
-        await cursor.execute("SELECT pg_try_advisory_lock(%s::bigint)", (lock_key, ))
+        await cursor.execute("SELECT pg_try_advisory_lock(%s::bigint)", (lock_key,))
         try:
             yield cursor
         finally:
-            await cursor.execute("SELECT pg_advisory_unlock(%s::bigint)", (lock_key, ))
+            await cursor.execute("SELECT pg_advisory_unlock(%s::bigint)", (lock_key,))

@@ -20,9 +20,11 @@ schemas = SchemaGenerator(
     {"openapi": "3.0.0", "info": {"title": "Example API", "version": "1.0"}}
 )
 
+
 class TransactionType(enum.Enum):
     EXPENSE = "expense"
     INCOME = "income"
+
 
 @dataclass
 class Transaction:
@@ -35,7 +37,7 @@ class Transaction:
 
     @classmethod
     def from_request_body(cls, body: bytes):
-        body_json = json.loads(body.decode())       
+        body_json = json.loads(body.decode())
         if body_json.get("type") == "expense":
             _type = TransactionType.EXPENSE
         else:
@@ -76,7 +78,7 @@ async def transaction(request: Request) -> JSONResponse:
     if request.method == "POST":
         conn = await db.create_or_return_connection()
         async with conn.cursor() as cursor:
-            query ="""
+            query = """
                 INSERT INTO transactions (amount, type, category, description, party, date)
                 VALUES (%(amount)s, %(type)s, %(category)s, %(description)s, %(party)s, %(date)s);
             """
