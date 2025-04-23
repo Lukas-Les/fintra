@@ -10,9 +10,9 @@ services:
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: main
     volumes:
-      - db:/var/lib/postgresql/data 
+      - db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
 volumes:
- 
+  db: {}

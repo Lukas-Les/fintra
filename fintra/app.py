@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy.types import Double
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 from starlette.schemas import SchemaGenerator
@@ -38,10 +38,20 @@ class Transaction:
     @classmethod
     def from_request_body(cls, body: bytes):
         body_json = json.loads(body.decode())
-        if body_json.get("type") == "expense":
+
+        if not (amount := body_json.get("amount")):
+            raise ValueError("Can't submit transaction withount amount")
+
+        if not (type_str := body_json.get("type")):
+            raise ValueError("Can't submit transaction withount type")
+
+        if type_str == "expense":
             _type = TransactionType.EXPENSE
-        else:
+        elif type_str == "income":
             _type = TransactionType.INCOME
+        else:
+            raise ValueError("Type must be one of ['income', 'expense']")
+
         return cls(
             amount=body_json.get("amount"),
             type=_type,
@@ -66,14 +76,12 @@ async def health_check(request: Request):
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         await cursor.execute("SELECT 1;")
-        result = await cursor.fetchone()  # Fetch to ensure the query works
+        await cursor.fetchone()
 
-        return JSONResponse(
-            {"status": "ok", "message": "Database connected", "result": result}
-        )
+        return Response()
 
 
-async def transaction(request: Request) -> JSONResponse:
+async def transaction(request: Request) -> Response:
     transaction = Transaction.from_request_body(await request.body())
     if request.method == "POST":
         conn = await db.create_or_return_connection()
@@ -83,11 +91,28 @@ async def transaction(request: Request) -> JSONResponse:
                 VALUES (%(amount)s, %(type)s, %(category)s, %(description)s, %(party)s, %(date)s);
             """
             await cursor.execute(query, params=transaction.as_dict())
-            response_obj = {"result": "transaction pushed"}
-        return JSONResponse(content=json.dumps(response_obj))
+        return Response()
     else:
-        response_obj = {"result": "only post implemented"}
-        return JSONResponse(content=json.dumps(response_obj))
+        response_obj = {"error": "GET is not implemeted for this path"}
+        return JSONResponse(content=json.dumps(response_obj), status_code=404)
+
+
+async def balance(request: Request) -> JSONResponse | Response:
+    if request.method == "GET":
+        conn = await db.create_or_return_connection()
+        async with conn.cursor() as cursor:
+            query = """
+                SELECT
+                    SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) -
+                    SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS balance
+                FROM transactions;
+            """
+            await cursor.execute(query)
+            if not (row := await cursor.fetchone()):
+                return Response(status_code=500)
+            balance = row[0]
+            return JSONResponse({"balance": float(balance)})
+    return JSONResponse(content={}, status_code=404)
 
 
 def openapi_schema(request):
@@ -98,6 +123,7 @@ routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
     Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
+    Route("/balance", endpoint=balance, methods=["GET"]),
 ]
 
 app = Starlette(debug=True, routes=routes)

@@ -4,13 +4,17 @@ services:
   postgres_test:
     image: postgres:15
     ports:
-      - "2222:5432"  # Different port to avoid conflicts with dev database
+      - "2222:5432"
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: test_db
+    volumes:
+      - test_db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U testuser -d test_db"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+volumes:
