@@ -13,6 +13,14 @@ services:
       - db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
 
 volumes:
   db: {}
+  prometheus-data: {}

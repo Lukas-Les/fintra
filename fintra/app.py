@@ -1,5 +1,6 @@
 import enum
 import json
+import logging
 
 from typing import Any
 
@@ -12,6 +13,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 from starlette.schemas import SchemaGenerator
+from starlette_prometheus import metrics, PrometheusMiddleware
 
 from fintra import db
 
@@ -124,6 +126,8 @@ routes = [
     Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
+    Route("/metrics", endpoint=metrics),
 ]
 
 app = Starlette(debug=True, routes=routes)
+app.add_middleware(PrometheusMiddleware)
