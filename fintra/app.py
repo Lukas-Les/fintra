@@ -7,15 +7,18 @@ from typing import Any
 from dataclasses import dataclass
 from datetime import datetime
 
+from prometheus_client import start_http_server, Summary
 from sqlalchemy.types import Double
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 from starlette.schemas import SchemaGenerator
-from starlette_prometheus import metrics, PrometheusMiddleware
 
 from fintra import db
+
+
+REQUEST_TIME = Summary("request_processing_seconds", "Request processing duratino")
 
 
 schemas = SchemaGenerator(
@@ -99,6 +102,7 @@ async def transaction(request: Request) -> Response:
         return JSONResponse(content=json.dumps(response_obj), status_code=404)
 
 
+@REQUEST_TIME.time()
 async def balance(request: Request) -> JSONResponse | Response:
     if request.method == "GET":
         conn = await db.create_or_return_connection()
@@ -126,8 +130,7 @@ routes = [
     Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
-    Route("/metrics", endpoint=metrics),
 ]
 
 app = Starlette(debug=True, routes=routes)
-app.add_middleware(PrometheusMiddleware)
+metrics_app = start_http_server(port=8001)
