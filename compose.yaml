@@ -1,8 +1,16 @@
-version: v2.34.0
-
 name: fintra
 
 services:
+  app:
+    build: .
+    environment:
+      LOG_LEVEL: warning
+      DATABASE_URL: postgresql://user:pass@db:5432/main
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      - db
   db:
     image: postgres:15
     environment:
@@ -20,6 +28,8 @@ services:
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
 
 volumes:
   db: {}

@@ -2,6 +2,8 @@ import enum
 import json
 import logging
 
+import functools
+
 from typing import Any
 
 from dataclasses import dataclass
@@ -102,7 +104,16 @@ async def transaction(request: Request) -> Response:
         return JSONResponse(content=json.dumps(response_obj), status_code=404)
 
 
-@REQUEST_TIME.time()
+def async_timed(func):
+    @functools.wraps(func)
+    async def wrapped(*args, **kwargs):
+        with REQUEST_TIME.time():
+            return await func(*args, **kwargs)
+
+    return wrapped
+
+
+@async_timed
 async def balance(request: Request) -> JSONResponse | Response:
     if request.method == "GET":
         conn = await db.create_or_return_connection()
