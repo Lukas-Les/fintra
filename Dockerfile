@@ -14,4 +14,7 @@ EXPOSE 8000 8001
 
 ENV PATH="/app/.venv/bin:$PATH"
 
+COPY entrypoint.sh .
+COPY debug-entrypoint.sh .
+
 CMD ["python -m fintra"]
