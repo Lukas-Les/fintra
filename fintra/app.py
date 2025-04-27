@@ -84,11 +84,11 @@ class Transaction:
 T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
 
 
-def async_timed(endpoint_name: str) -> Callable[[T], T]:
+def async_timed(endpoint: str) -> Callable[[T], T]:
     def decorator(func: T) -> T:
         @functools.wraps(func)
         async def wrapped(*args, **kwargs) -> Any:
-            with REQUEST_TIME.labels(endpoint_name=endpoint_name).time():
+            with REQUEST_TIME.labels(endpoint=endpoint).time():
                 return await func(*args, **kwargs)
 
         return cast(T, wrapped)
