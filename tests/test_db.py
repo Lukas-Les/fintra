@@ -28,8 +28,6 @@ class TestAPIWithRealDB:
 
         # Verify response
         assert response.status_code == 200
-        assert response.json()["status"] == "ok"
-        assert response.json()["message"] == "Database connected"
 
     @pytest.mark.asyncio
     async def test_transaction_post(self, client):

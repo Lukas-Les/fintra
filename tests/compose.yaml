@@ -1,4 +1,4 @@
-version: v2.34.0
+name: fintra-test
 
 services:
   postgres_test:
@@ -18,3 +18,4 @@ services:
       retries: 5
 
 volumes:
+  test_db: {}

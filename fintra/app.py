@@ -60,7 +60,7 @@ class Transaction:
             raise ValueError("Type must be one of ['income', 'expense']")
 
         return cls(
-            amount=body_json.get("amount"),
+            amount=amount,
             type=_type,
             category=body_json.get("category"),
             description=body_json.get("description"),
