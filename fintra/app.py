@@ -4,7 +4,7 @@ import logging
 
 import functools
 
-from typing import Any
+from typing import Any, Awaitable, Callable, cast, TypeVar
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,7 +20,9 @@ from starlette.schemas import SchemaGenerator
 from fintra import db
 
 
-REQUEST_TIME = Summary("request_processing_seconds", "Request processing duratino")
+REQUEST_TIME = Summary(
+    "request_processing_seconds", "Request processing duratino", ["endpoint"]
+)
 
 
 schemas = SchemaGenerator(
@@ -79,6 +81,22 @@ class Transaction:
         }
 
 
+T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
+
+
+def async_timed(endpoint_name: str) -> Callable[[T], T]:
+    def decorator(func: T) -> T:
+        @functools.wraps(func)
+        async def wrapped(*args, **kwargs) -> Any:
+            with REQUEST_TIME.labels(endpoint_name=endpoint_name).time():
+                return await func(*args, **kwargs)
+
+        return cast(T, wrapped)
+
+    return decorator
+
+
+@async_timed("health")
 async def health_check(request: Request):
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
@@ -88,6 +106,7 @@ async def health_check(request: Request):
         return Response()
 
 
+@async_timed("transaction")
 async def transaction(request: Request) -> Response:
     transaction = Transaction.from_request_body(await request.body())
     if request.method == "POST":
@@ -104,16 +123,7 @@ async def transaction(request: Request) -> Response:
         return JSONResponse(content=json.dumps(response_obj), status_code=404)
 
 
-def async_timed(func):
-    @functools.wraps(func)
-    async def wrapped(*args, **kwargs):
-        with REQUEST_TIME.time():
-            return await func(*args, **kwargs)
-
-    return wrapped
-
-
-@async_timed
+@async_timed("balance")
 async def balance(request: Request) -> JSONResponse | Response:
     if request.method == "GET":
         conn = await db.create_or_return_connection()
