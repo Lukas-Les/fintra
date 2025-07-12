@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from prometheus_client import start_http_server, Summary
-from sqlalchemy.types import Double
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
@@ -37,7 +36,7 @@ class TransactionType(enum.Enum):
 
 @dataclass
 class Transaction:
-    amount: Double
+    amount: float
     type: TransactionType
     category: str
     description: str
@@ -103,7 +102,7 @@ async def health_check(request: Request):
         await cursor.execute("SELECT 1;")
         await cursor.fetchone()
 
-        return Response()
+        return Response("hello there")
 
 
 @async_timed("transaction")

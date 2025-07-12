@@ -1,20 +1,26 @@
 FROM python:3.13.1-bookworm
 
-WORKDIR /app
+ARG APP_DIR=fintra
+WORKDIR /app/
 
-COPY requirements/main.txt requirements/main.txt
+# Install pipx and then uv using pipx.
+# pipx ensures uv is installed in its own isolated environment.
+RUN pip install --no-cache-dir pipx && \
+    pipx install uv
 
-RUN python -m venv .venv && \
-    . .venv/bin/activate && \
-    pip install --no-cache-dir -r requirements/main.txt
+ENV PATH="/root/.local/bin:$PATH"
+
+COPY pyproject.toml .
+COPY uv.lock .
+
+RUN uv sync --locked
 
 COPY fintra/ /app/fintra/
 
 EXPOSE 8000 8001
 
-ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["/app/.venv/bin/python", "-m", "fintra"]
 
 COPY entrypoint.sh .
 COPY debug-entrypoint.sh .
-
-CMD ["python -m fintra"]
