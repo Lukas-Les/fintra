@@ -137,6 +137,8 @@ async def balance(request: Request) -> JSONResponse | Response:
             if not (row := await cursor.fetchone()):
                 return Response(status_code=500)
             balance = row[0]
+            if balance is None:
+                balance = 0.0
             return JSONResponse({"balance": float(balance)})
     return JSONResponse(content={}, status_code=404)
 

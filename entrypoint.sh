@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python -m fintra
+/app/.venv/bin/python -m fintra
