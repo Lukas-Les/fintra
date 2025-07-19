@@ -3,6 +3,7 @@ name: fintra
 services:
   app:
     build: .
+    container_name: app-backend
     environment:
       LOG_LEVEL: warning
       DATABASE_URL: postgresql://user:pass@db:5432/main
@@ -13,7 +14,9 @@ services:
     depends_on:
       - db
     entrypoint:
-      - ./debug-entrypoint.sh
+      - ./entrypoint.sh
+    networks:
+      - fintra_main
   db:
     image: postgres:15
     environment:
@@ -24,6 +27,8 @@ services:
       - db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - fintra_main
   prometheus:
     image: prom/prometheus
     volumes:
@@ -33,6 +38,8 @@ services:
       - "9090:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
+    networks:
+      - fintra_main
   grafana:
     image: grafana/grafana-oss
     environment:
@@ -44,8 +51,16 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     ports:
       - "3000:3000"
+    networks:
+      - fintra_main
 
 volumes:
   db: {}
   prometheus-data: {}
   grafana-data: {}
+
+networks:
+  fintra_main:
+    name: fintra_main
+    driver: bridge
+    attachable: true
