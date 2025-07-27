@@ -14,7 +14,7 @@ services:
     depends_on:
       - db
     entrypoint:
-      - ./entrypoint.sh
+      - ./debug-entrypoint.sh
     networks:
       - fintra_main
   db:

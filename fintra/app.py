@@ -1,3 +1,5 @@
+import base64
+import binascii
 import enum
 import json
 import logging
@@ -7,14 +9,24 @@ import functools
 from typing import Any, Awaitable, Callable, cast, TypeVar
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from jose import jwt, exceptions
 from prometheus_client import start_http_server, Summary
 from starlette.applications import Starlette
+from starlette.authentication import (
+    AuthCredentials,
+    AuthenticationBackend,
+    AuthenticationError,
+    SimpleUser,
+)
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 from starlette.schemas import SchemaGenerator
+
 
 from fintra import db
 
@@ -27,6 +39,37 @@ REQUEST_TIME = Summary(
 schemas = SchemaGenerator(
     {"openapi": "3.0.0", "info": {"title": "Example API", "version": "1.0"}}
 )
+
+# Configuration for JWT
+SECRET_KEY = "random"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
+
+# Dummy user database (REPLACE WITH REAL DATABASE LOOKUP AND PASSWORD HASHING)
+# Example: Store hashed passwords like 'testuser': '$2b$12$...'
+DUMMY_USERS_DB = {
+    "user@test.com": "pass",  # In production, this would be a hashed password
+    "lukas@gmail.com": "pass",
+}
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def decode_access_token(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except exceptions.JWTError:
+        return None
 
 
 class TransactionType(enum.Enum):
@@ -105,6 +148,60 @@ async def health_check(request: Request):
         return Response("hello there")
 
 
+class TokenAuthBackend(AuthenticationBackend):
+    async def authenticate(self, conn):
+        # Check for 'access_token' cookie
+        token = conn.cookies.get("access_token")
+        if not token:
+            return
+
+        payload = decode_access_token(token)
+        if payload is None:
+            raise AuthenticationError("Invalid or expired token")
+
+        username = payload.get("sub")
+        if not username:
+            return
+
+        # Optional: In a real application, you might want to fetch user details from DB here
+        # user_data = await db.get_user_by_username(username)
+        # if not user_data:
+        #     return
+
+        return AuthCredentials(["authenticated"]), SimpleUser(username)
+
+
+@async_timed("login")
+async def login(request: Request) -> JSONResponse:
+    if request.method != "POST":
+        return JSONResponse(status_code=405, content={"detail": "Method not allowed"})
+
+    form = await request.form()
+    email = form.get("email")
+    password = form.get("password")
+
+    # In a real application, fetch user from DB and verify hashed password (e.g., bcrypt)
+    # For demonstration:
+    if email not in DUMMY_USERS_DB or DUMMY_USERS_DB[email] != password:
+        raise AuthenticationError("Invalid username or password")
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": email}, expires_delta=access_token_expires
+    )
+
+    response = JSONResponse({"message": "Login successful", "email": email})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # Set to True in production if using HTTPS
+        max_age=int(access_token_expires.total_seconds()),
+        path="/",
+    )
+    response.headers["HX-Redirect"] = "/"  # Example: redirect to dashboard after login
+    return response
+
+
 @async_timed("transaction")
 async def transaction(request: Request) -> Response:
     transaction = Transaction.from_request_body(await request.body())
@@ -147,12 +244,15 @@ def openapi_schema(request):
     return schemas.OpenAPIResponse(request=request)
 
 
+middleware = [Middleware(AuthenticationMiddleware, backend=TokenAuthBackend())]
+
 routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
     Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
+    Route("/login", endpoint=login, methods=["POST"]),  # Ensure login route is present
 ]
 
-app = Starlette(debug=True, routes=routes)
+app = Starlette(routes=routes, middleware=middleware)
 metrics_app = start_http_server(port=8001)
