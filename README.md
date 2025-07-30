@@ -53,7 +53,7 @@ source .venv/bin/activate
 2. Install test dependencies:
 
 ```bash
-pip install -r requirements/test.txt
+uv sync --group test
 ```
 
 3. Launch test services:
