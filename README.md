@@ -8,7 +8,7 @@ Fintra is a backend service for tracking personal finances. It provides a simple
 - Track transaction details including amount, category, description, and party
 - Query current balance
 - Built-in monitoring with Prometheus and Grafana
-- Database migrations with Alembic
+- Database migrations with yoyo-migrations
 
 ## API Endpoints
 
@@ -95,15 +95,12 @@ pip freeze > requirements/main.txt  # or the appropriate requirements file
 ### Working with Database Migrations
 
 Create a new migration:
-
 ```bash
-alembic revision -m "description of changes" --autogenerate
+yoyo new -m "Add column to foo"
 ```
 
-Apply migrations:
-
 ```bash
-alembic upgrade head
+yoyo apply
 ```
 
 ### Debug Mode
