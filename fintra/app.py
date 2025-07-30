@@ -1,3 +1,4 @@
+import re
 import base64
 import binascii
 import enum
@@ -44,6 +45,7 @@ schemas = SchemaGenerator(
 SECRET_KEY = "random"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
+EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
 
 # Dummy user database (REPLACE WITH REAL DATABASE LOOKUP AND PASSWORD HASHING)
 # Example: Store hashed passwords like 'testuser': '$2b$12$...'
@@ -148,6 +150,48 @@ async def health_check(request: Request):
         return Response("hello there")
 
 
+@async_timed("create-user")
+async def create_user(request: Request):
+    form = await request.form()
+    if not (email := form.get("email")):
+        raise ValueError("no email provided")
+    if not EMAIL_PATTERN.search(str(email)):
+        raise ValueError("email is in wrong format")
+    password = str(form.get("password", ""))
+    if len(password) < 5:
+        raise ValueError("password is too short")
+
+    conn = await db.create_or_return_connection()
+    async with conn.cursor() as cursor:
+        query = """
+            SELECT email FROM users
+            WHERE email = %(email)s;
+        """
+        await cursor.execute(query, params={"email": email})
+        if await cursor.fetchone():
+            raise ValueError("email already exists")
+        query = """
+            INSERT INTO users (email, password)
+            VALUES (%(email)s, %(password)s);
+        """
+        await cursor.execute(query=query, params={"email": email, "password": password})
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": email}, expires_delta=access_token_expires
+    )
+
+    response = JSONResponse({"email": email}, status_code=201)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # Set to True in production if using HTTPS
+        max_age=int(access_token_expires.total_seconds()),
+        path="/",
+    )
+    response.headers["HX-Redirect"] = "/"  # Example: redirect to dashboard after login
+    return response
+
 class TokenAuthBackend(AuthenticationBackend):
     async def authenticate(self, conn):
         # Check for 'access_token' cookie
@@ -251,7 +295,8 @@ routes = [
     Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
-    Route("/login", endpoint=login, methods=["POST"]),  # Ensure login route is present
+    Route("/login", endpoint=login, methods=["POST"]),
+    Route("/create-user", create_user, methods=["POST"])
 ]
 
 app = Starlette(routes=routes, middleware=middleware)
