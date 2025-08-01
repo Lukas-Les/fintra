@@ -20,6 +20,7 @@ from starlette.authentication import (
     AuthenticationBackend,
     AuthenticationError,
     SimpleUser,
+    requires,
 )
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
@@ -203,31 +204,45 @@ class TokenAuthBackend(AuthenticationBackend):
         if payload is None:
             raise AuthenticationError("Invalid or expired token")
 
-        username = payload.get("sub")
-        if not username:
+        email = payload.get("sub")
+        if not email:
             return
 
-        # Optional: In a real application, you might want to fetch user details from DB here
-        # user_data = await db.get_user_by_username(username)
-        # if not user_data:
-        #     return
-
-        return AuthCredentials(["authenticated"]), SimpleUser(username)
+        conn = await db.create_or_return_connection()
+        async with conn.cursor() as cursor:
+            query = """
+                SELECT email FROM users
+                WHERE email = %(email)s;
+            """
+            await cursor.execute(query, params={"email": email})
+            result  = await cursor.fetchone()
+            if not result:
+                return
+        return AuthCredentials(["authenticated"]), SimpleUser(email)
 
 
 @async_timed("login")
 async def login(request: Request) -> JSONResponse:
-    if request.method != "POST":
-        return JSONResponse(status_code=405, content={"detail": "Method not allowed"})
-
     form = await request.form()
     email = form.get("email")
     password = form.get("password")
+    if not (email := form.get("email")):
+        raise ValueError("no email provided")
+    if not EMAIL_PATTERN.search(str(email)):
+        raise ValueError("email is in wrong format")
 
-    # In a real application, fetch user from DB and verify hashed password (e.g., bcrypt)
-    # For demonstration:
-    if email not in DUMMY_USERS_DB or DUMMY_USERS_DB[email] != password:
-        raise AuthenticationError("Invalid username or password")
+    conn = await db.create_or_return_connection()
+    async with conn.cursor() as cursor:
+        query = """
+            SELECT password FROM users
+            WHERE email = %(email)s;
+        """
+        await cursor.execute(query, params={"email": email})
+        result  = await cursor.fetchone()
+        if not result:
+            raise Exception("user does not exist")
+    if password != result[0]:
+        raise ValueError("password not correct")
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
@@ -242,11 +257,12 @@ async def login(request: Request) -> JSONResponse:
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.headers["HX-Redirect"] = "/"  # Example: redirect to dashboard after login
+    response.headers["HX-Redirect"] = "/"
     return response
 
 
 @async_timed("transaction")
+@requires("authenticated")
 async def transaction(request: Request) -> Response:
     transaction = Transaction.from_request_body(await request.body())
     if request.method == "POST":
@@ -264,23 +280,24 @@ async def transaction(request: Request) -> Response:
 
 
 @async_timed("balance")
+@requires("authenticated")
 async def balance(request: Request) -> JSONResponse | Response:
-    if request.method == "GET":
-        conn = await db.create_or_return_connection()
-        async with conn.cursor() as cursor:
-            query = """
-                SELECT
-                    SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) -
-                    SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS balance
-                FROM transactions;
-            """
-            await cursor.execute(query)
-            if not (row := await cursor.fetchone()):
-                return Response(status_code=500)
-            balance = row[0]
-            if balance is None:
-                balance = 0.0
-            return JSONResponse({"balance": float(balance)})
+    email = request.user.username
+    conn = await db.create_or_return_connection()
+    async with conn.cursor() as cursor:
+        query = """
+            SELECT
+                SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) -
+                SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS balance
+            FROM transactions;
+        """
+        await cursor.execute(query)
+        if not (row := await cursor.fetchone()):
+            return Response(status_code=500)
+        balance = row[0]
+        if balance is None:
+            balance = 0.0
+        return JSONResponse({"balance": float(balance)})
     return JSONResponse(content={}, status_code=404)
 
 
@@ -298,6 +315,7 @@ routes = [
     Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"])
 ]
+
 
 app = Starlette(routes=routes, middleware=middleware)
 metrics_app = start_http_server(port=8001)
