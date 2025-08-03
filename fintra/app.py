@@ -265,33 +265,34 @@ async def login(request: Request) -> JSONResponse:
 @requires("authenticated")
 async def transaction(request: Request) -> Response:
     transaction = Transaction.from_request_body(await request.body())
-    if request.method == "POST":
-        conn = await db.create_or_return_connection()
-        async with conn.cursor() as cursor:
-            query = """
-                INSERT INTO transactions (amount, type, category, description, party, date)
-                VALUES (%(amount)s, %(type)s, %(category)s, %(description)s, %(party)s, %(date)s);
-            """
-            await cursor.execute(query, params=transaction.as_dict())
-        return Response()
-    else:
-        response_obj = {"error": "GET is not implemeted for this path"}
-        return JSONResponse(content=json.dumps(response_obj), status_code=404)
+    conn = await db.create_or_return_connection()
+    async with conn.cursor() as cursor:
+        query = """
+            INSERT INTO transactions (amount, type, category, description, party, date, user_id)
+            SELECT %(amount)s, %(type)s, %(category)s, %(description)s, %(party)s, %(date)s, users.id
+            FROM users
+            WHERE users.email = %(email)s
+        """
+        params = transaction.as_dict()
+        params["email"] = request.user.username
+        await cursor.execute(query, params=params)
+    return Response(status_code=201)
 
 
 @async_timed("balance")
 @requires("authenticated")
 async def balance(request: Request) -> JSONResponse | Response:
-    email = request.user.username
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
             SELECT
                 SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) -
                 SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS balance
-            FROM transactions;
+            FROM transactions
+            JOIN users on transactions.user_id = users.id
+            WHERE users.email = %(email)s;
         """
-        await cursor.execute(query)
+        await cursor.execute(query, params={"email": request.user.username})
         if not (row := await cursor.fetchone()):
             return Response(status_code=500)
         balance = row[0]
