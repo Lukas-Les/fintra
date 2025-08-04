@@ -3,7 +3,6 @@ import uvicorn
 
 from typing import Any
 
-from fintra import config
 from fintra.app import app
 
 

@@ -1,22 +1,19 @@
 import sys
 import os
 import asyncio
-import pytest
-import psycopg
 import pytest_asyncio
 
 from asgi_lifespan import LifespanManager
 from dotenv import load_dotenv
 from httpx import AsyncClient, ASGITransport
-from starlette.testclient import TestClient
-from typing import Any, Generator
+
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 load_dotenv(dotenv_path="./.env.test")
 
-from fintra.app import app
-from fintra import db
+from fintra.app import app  # noqa: E402
+from fintra import db  # noqa: E402
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -40,7 +37,7 @@ async def setup_database():
 @pytest_asyncio.fixture()
 async def async_client():
     """Create a properly configured async client."""
-    async with LifespanManager(app) as manager:
+    async with LifespanManager(app):
         async with AsyncClient(
             base_url="http://test", transport=ASGITransport(app)
         ) as client:

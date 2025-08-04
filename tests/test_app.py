@@ -1,7 +1,6 @@
-from httpx import AsyncClient
 import pytest
-import json
-from starlette.testclient import TestClient
+
+from httpx import AsyncClient
 from datetime import datetime
 
 
@@ -44,7 +43,7 @@ async def test_create_user_already_exists(async_client: AsyncClient):
 async def test_create_user_invalid_email(async_client: AsyncClient):
     """Tests user creation with an invalid email format."""
     with pytest.raises(ValueError):
-        response = await async_client.post(
+        await async_client.post(
             "/create-user", data={"email": "not-an-email", "password": "password123"}
         )
 
@@ -53,7 +52,7 @@ async def test_create_user_invalid_email(async_client: AsyncClient):
 async def test_create_user_short_password(async_client: AsyncClient):
     """Tests user creation with a password that is too short."""
     with pytest.raises(ValueError):
-        response = await async_client.post(
+        await async_client.post(
             "/create-user", data={"email": "user@example.com", "password": "123"}
         )
 
@@ -65,7 +64,9 @@ async def test_login_success(async_client: AsyncClient):
     password = "password123"
     await async_client.post("/create-user", data={"email": email, "password": password})
     # Now, log in
-    response = await async_client.post("/login", data={"email": email, "password": password})
+    response = await async_client.post(
+        "/login", data={"email": email, "password": password}
+    )
     assert response.status_code == 200
     assert response.json()["message"] == "Login successful"
     assert "access_token" in response.cookies
@@ -79,7 +80,9 @@ async def test_login_wrong_password(async_client: AsyncClient):
     password = "password123"
     await async_client.post("/create-user", data={"email": email, "password": password})
     with pytest.raises(ValueError):
-        await async_client.post("/login", data={"email": email, "password": "wrongpassword"})
+        await async_client.post(
+            "/login", data={"email": email, "password": "wrongpassword"}
+        )
 
 
 @pytest.mark.asyncio

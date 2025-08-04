@@ -1,13 +1,10 @@
 import re
-import base64
-import binascii
 import enum
 import json
-import logging
 
 import functools
 
-from typing import Any, Awaitable, Callable, cast, TypeVar
+from typing import Any, Awaitable, Callable, ParamSpec, cast, TypeVar
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -27,7 +24,6 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
-from starlette.schemas import SchemaGenerator
 
 
 from fintra import db
@@ -38,30 +34,18 @@ REQUEST_TIME = Summary(
 )
 
 
-schemas = SchemaGenerator(
-    {"openapi": "3.0.0", "info": {"title": "Example API", "version": "1.0"}}
-)
-
-# Configuration for JWT
 SECRET_KEY = "random"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
 EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
 
-# Dummy user database (REPLACE WITH REAL DATABASE LOOKUP AND PASSWORD HASHING)
-# Example: Store hashed passwords like 'testuser': '$2b$12$...'
-DUMMY_USERS_DB = {
-    "user@test.com": "pass",  # In production, this would be a hashed password
-    "lukas@gmail.com": "pass",
-}
-
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -126,17 +110,19 @@ class Transaction:
         }
 
 
-T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
+P = ParamSpec("P")
+R = TypeVar("R")
+FuncType = Callable[P, Awaitable[R]]
 
 
-def async_timed(endpoint: str) -> Callable[[T], T]:
-    def decorator(func: T) -> T:
+def async_timed(endpoint: str) -> Callable[[FuncType], FuncType]:
+    def decorator(func: FuncType) -> FuncType:
         @functools.wraps(func)
-        async def wrapped(*args, **kwargs) -> Any:
+        async def wrapped(*args: P.args, **kwargs: P.kwargs) -> object:
             with REQUEST_TIME.labels(endpoint=endpoint).time():
                 return await func(*args, **kwargs)
 
-        return cast(T, wrapped)
+        return cast(FuncType, wrapped)
 
     return decorator
 
@@ -190,8 +176,9 @@ async def create_user(request: Request):
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.headers["HX-Redirect"] = "/"  # Example: redirect to dashboard after login
+    response.headers["HX-Redirect"] = "/"
     return response
+
 
 class TokenAuthBackend(AuthenticationBackend):
     async def authenticate(self, conn):
@@ -302,15 +289,10 @@ async def balance(request: Request) -> JSONResponse | Response:
     return JSONResponse(content={}, status_code=404)
 
 
-def openapi_schema(request):
-    return schemas.OpenAPIResponse(request=request)
-
-
 middleware = [Middleware(AuthenticationMiddleware, backend=TokenAuthBackend())]
 
 routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
-    Route("/docs", endpoint=openapi_schema, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
     Route("/login", endpoint=login, methods=["POST"]),

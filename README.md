@@ -71,7 +71,13 @@ docker compose -f tests/compose.yaml up -d
 ### Run Tests
 
 ```bash
-pytest -vv
+./test.sh
+```
+
+### Lint
+
+```bash
+./lint.sh
 ```
 
 ## Development
