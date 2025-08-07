@@ -22,7 +22,7 @@ async def test_create_user_success(async_client: AsyncClient, setup_database: No
     assert response.status_code == 201
     assert response.json()["email"] == "testuser@example.com"
     assert "access_token" in response.cookies
-    assert response.headers["hx-redirect"] == "/"
+    assert response.headers["hx-redirect"] == "/dashboard"
 
 
 @pytest.mark.asyncio
@@ -70,7 +70,7 @@ async def test_login_success(async_client: AsyncClient):
     assert response.status_code == 200
     assert response.json()["message"] == "Login successful"
     assert "access_token" in response.cookies
-    assert response.headers["hx-redirect"] == "/"
+    assert response.headers["hx-redirect"] == "/dashboard"
 
 
 @pytest.mark.asyncio
