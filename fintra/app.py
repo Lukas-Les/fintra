@@ -176,7 +176,7 @@ async def create_user(request: Request):
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.headers["HX-Redirect"] = "/"
+    response.headers["HX-Redirect"] = "/dashboard"
     return response
 
 
@@ -242,6 +242,21 @@ async def login(request: Request) -> JSONResponse:
         httponly=True,
         secure=False,  # Set to True in production if using HTTPS
         max_age=int(access_token_expires.total_seconds()),
+        path="/",
+    )
+    response.headers["HX-Redirect"] = "/dashboard"
+    return response
+
+
+@async_timed("logout")
+async def logout(request: Request) -> JSONResponse:
+    response = JSONResponse({"message": "Logged out successfully"})
+    response.set_cookie(
+        key="access_token",
+        value="",
+        httponly=True,
+        secure=False,  # Must be True in production if using HTTPS
+        max_age=0,
         path="/",
     )
     response.headers["HX-Redirect"] = "/"
