@@ -1,3 +1,4 @@
+import os
 import re
 import enum
 import json
@@ -9,6 +10,7 @@ from typing import Any, Awaitable, Callable, ParamSpec, cast, TypeVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from argon2 import PasswordHasher
 from jose import jwt, exceptions
 from prometheus_client import start_http_server, Summary
 from starlette.applications import Starlette
@@ -25,7 +27,6 @@ from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 
-
 from fintra import db
 
 
@@ -36,8 +37,11 @@ REQUEST_TIME = Summary(
 
 SECRET_KEY = "random"
 ALGORITHM = "HS256"
+SALT=os.environ["SALT"].encode()
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
 EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
+
+ph = PasswordHasher()
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -147,7 +151,7 @@ async def create_user(request: Request):
     password = str(form.get("password", ""))
     if len(password) < 5:
         raise ValueError("password is too short")
-
+    hashed = ph.hash(password=password, salt=SALT)
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
@@ -161,7 +165,7 @@ async def create_user(request: Request):
             INSERT INTO users (email, password)
             VALUES (%(email)s, %(password)s);
         """
-        await cursor.execute(query=query, params={"email": email, "password": password})
+        await cursor.execute(query=query, params={"email": email, "password": hashed})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
@@ -202,7 +206,7 @@ class TokenAuthBackend(AuthenticationBackend):
                 WHERE email = %(email)s;
             """
             await cursor.execute(query, params={"email": email})
-            result  = await cursor.fetchone()
+            result = await cursor.fetchone()
             if not result:
                 return
         return AuthCredentials(["authenticated"]), SimpleUser(email)
@@ -213,6 +217,8 @@ async def login(request: Request) -> JSONResponse:
     form = await request.form()
     email = form.get("email")
     password = form.get("password")
+    if not isinstance(password, str):
+        raise ValueError("password must be a text entry")
     if not (email := form.get("email")):
         raise ValueError("no email provided")
     if not EMAIL_PATTERN.search(str(email)):
@@ -225,11 +231,21 @@ async def login(request: Request) -> JSONResponse:
             WHERE email = %(email)s;
         """
         await cursor.execute(query, params={"email": email})
-        result  = await cursor.fetchone()
+        result = await cursor.fetchone()
         if not result:
             raise Exception("user does not exist")
-    if password != result[0]:
-        raise ValueError("password not correct")
+        hashed = result[0]
+        ph.verify(hashed, password=password)
+        if not ph.check_needs_rehash(hashed):
+            new_hash = ph.hash(password=password, salt=SALT)
+            query = """
+                UPDATE users
+                SET
+                    password = %(password)s
+                WHERE email = %(email)s;
+
+            """
+            await cursor.execute(query=query, params={"email": email, "password": new_hash})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
@@ -311,7 +327,7 @@ routes = [
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
     Route("/login", endpoint=login, methods=["POST"]),
-    Route("/create-user", create_user, methods=["POST"])
+    Route("/create-user", create_user, methods=["POST"]),
 ]
 
 

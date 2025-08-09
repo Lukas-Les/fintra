@@ -6,7 +6,7 @@ services:
     container_name: app-backend
     environment:
       LOG_LEVEL: warning
-      DATABASE_URL: postgresql://user:pass@db:5432/main
+      ENV: dev
     ports:
       - "8000:8000"
       - "8001:8001"

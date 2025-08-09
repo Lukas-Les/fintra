@@ -1,9 +1,15 @@
 import os
 import uvicorn
 
+from dotenv import load_dotenv
 from typing import Any
 
+env = os.getenv("ENV", "dev")
+if env == "dev":
+    load_dotenv(dotenv_path="./.env")
+
 from fintra.app import app
+
 
 
 LOGGING_CONFIG: dict[str, Any] = {

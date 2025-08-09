@@ -1,5 +1,6 @@
 import pytest
 
+from argon2.exceptions import VerifyMismatchError
 from httpx import AsyncClient
 from datetime import datetime
 
@@ -79,7 +80,7 @@ async def test_login_wrong_password(async_client: AsyncClient):
     email = "wrongpass@example.com"
     password = "password123"
     await async_client.post("/create-user", data={"email": email, "password": password})
-    with pytest.raises(ValueError):
+    with pytest.raises(VerifyMismatchError):
         await async_client.post(
             "/login", data={"email": email, "password": "wrongpassword"}
         )
