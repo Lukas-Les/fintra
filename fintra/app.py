@@ -215,12 +215,13 @@ class TokenAuthBackend(AuthenticationBackend):
 @async_timed("login")
 async def login(request: Request) -> JSONResponse:
     form = await request.form()
-    email = form.get("email")
     password = form.get("password")
     if not isinstance(password, str):
         raise ValueError("password must be a text entry")
     if not (email := form.get("email")):
         raise ValueError("no email provided")
+    if not isinstance(email, str):
+        raise ValueError("email must be a text entry")
     if not EMAIL_PATTERN.search(str(email)):
         raise ValueError("email is in wrong format")
 
@@ -253,6 +254,12 @@ async def login(request: Request) -> JSONResponse:
 
     response = JSONResponse({"message": "Login successful", "email": email})
     response.set_cookie(
+        key="email",
+        value=email,
+        secure=False,
+        path="/"
+    )
+    response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
@@ -267,14 +274,8 @@ async def login(request: Request) -> JSONResponse:
 @async_timed("logout")
 async def logout(request: Request) -> JSONResponse:
     response = JSONResponse({"message": "Logged out successfully"})
-    response.set_cookie(
-        key="access_token",
-        value="",
-        httponly=True,
-        secure=False,  # Must be True in production if using HTTPS
-        max_age=0,
-        path="/",
-    )
+    response.delete_cookie(key="access_token")
+    response.delete_cookie(key="email")
     response.headers["HX-Redirect"] = "/"
     return response
 
@@ -328,6 +329,7 @@ routes = [
     Route("/balance", endpoint=balance, methods=["GET"]),
     Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"]),
+    Route("/logout", logout, methods=["POST"])
 ]
 
 
