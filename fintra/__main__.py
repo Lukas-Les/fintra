@@ -8,7 +8,7 @@ env = os.getenv("ENV", "dev")
 if env == "dev":
     load_dotenv(dotenv_path="./.env")
 
-from fintra.app import app
+from fintra.app import app  # noqa: E402
 
 
 
