@@ -6,7 +6,6 @@ services:
     container_name: app-backend
     environment:
       LOG_LEVEL: warning
-      ENV: dev
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -17,6 +16,7 @@ services:
       - ./debug-entrypoint.sh
     networks:
       - fintra_main
+    env_file: ".env"
   db:
     image: postgres:15
     environment:
