@@ -23,7 +23,7 @@ from starlette.authentication import (
 )
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 
@@ -142,10 +142,12 @@ async def health_check(request: Request):
 
 
 @async_timed("create-user")
-async def create_user(request: Request):
+async def create_user(request: Request) -> RedirectResponse:
     form = await request.form()
     if not (email := form.get("email")):
         raise ValueError("no email provided")
+    if not isinstance(email, str):
+        raise ValueError("email must be a text input")
     if not EMAIL_PATTERN.search(str(email)):
         raise ValueError("email is in wrong format")
     password = str(form.get("password", ""))
@@ -171,7 +173,7 @@ async def create_user(request: Request):
         data={"sub": email}, expires_delta=access_token_expires
     )
 
-    response = JSONResponse({"email": email}, status_code=201)
+    response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -180,7 +182,12 @@ async def create_user(request: Request):
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.headers["HX-Redirect"] = "/dashboard"
+    response.set_cookie(
+        key="email",
+        value=email,
+        secure=False,
+        path="/"
+    )
     return response
 
 
@@ -213,7 +220,7 @@ class TokenAuthBackend(AuthenticationBackend):
 
 
 @async_timed("login")
-async def login(request: Request) -> JSONResponse:
+async def login(request: Request) -> RedirectResponse:
     form = await request.form()
     password = form.get("password")
     if not isinstance(password, str):
@@ -252,7 +259,7 @@ async def login(request: Request) -> JSONResponse:
         data={"sub": email}, expires_delta=access_token_expires
     )
 
-    response = JSONResponse({"message": "Login successful", "email": email})
+    response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
         key="email",
         value=email,
@@ -267,7 +274,6 @@ async def login(request: Request) -> JSONResponse:
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.headers["HX-Redirect"] = "/dashboard"
     return response
 
 
