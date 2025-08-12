@@ -6,6 +6,7 @@ import json
 import functools
 
 from typing import Any, Awaitable, Callable, ParamSpec, cast, TypeVar
+from urllib.parse import parse_qs
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -21,6 +22,7 @@ from starlette.authentication import (
     SimpleUser,
     requires,
 )
+from starlette.datastructures import FormData
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -37,7 +39,7 @@ REQUEST_TIME = Summary(
 
 SECRET_KEY = "random"
 ALGORITHM = "HS256"
-SALT=os.environ["SALT"].encode()
+SALT = os.environ["SALT"].encode()
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
 EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
 
@@ -101,6 +103,50 @@ class Transaction:
             description=body_json.get("description"),
             party=body_json.get("party"),
             date=body_json.get("date") or datetime.now(),
+        )
+
+    @staticmethod
+    def _raise_if_not_string(value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError("expected type str, got" + type(value).__name__)
+        return value
+
+    @classmethod
+    def from_form_data(cls, form_data: FormData):
+        amount_str = cls._raise_if_not_string(form_data.get("amount"))
+        if not amount_str:
+            raise ValueError("can't submit transaction without amount")
+        try:
+            amount = float(amount_str)
+        except ValueError:
+            raise ValueError("amount must be a valid number")
+
+        type_str = cls._raise_if_not_string(form_data.get("type"))
+        if not type_str:
+            raise ValueError("Can't submit transaction without type")
+        if type_str == "expense":
+            _type = TransactionType.EXPENSE
+        elif type_str == "income":
+            _type = TransactionType.INCOME
+        else:
+            raise ValueError("Type must be one of ['income', 'expense']")
+
+        category = cls._raise_if_not_string(form_data.get("category"))
+        description = cls._raise_if_not_string(form_data.get("description"))
+        party = cls._raise_if_not_string(form_data.get("party"))
+
+        if raw_date := form_data.get("date"):
+            _date = datetime.fromisoformat(cls._raise_if_not_string(raw_date))
+        else:
+            _date = datetime.now()
+
+        return cls(
+            amount=amount,
+            type=_type,
+            category=category,
+            description=description,
+            party=party,
+            date=_date,
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -182,12 +228,7 @@ async def create_user(request: Request) -> RedirectResponse:
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
-    response.set_cookie(
-        key="email",
-        value=email,
-        secure=False,
-        path="/"
-    )
+    response.set_cookie(key="email", value=email, secure=False, path="/")
     return response
 
 
@@ -253,19 +294,16 @@ async def login(request: Request) -> RedirectResponse:
                 WHERE email = %(email)s;
 
             """
-            await cursor.execute(query=query, params={"email": email, "password": new_hash})
+            await cursor.execute(
+                query=query, params={"email": email, "password": new_hash}
+            )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
     )
 
     response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(
-        key="email",
-        value=email,
-        secure=False,
-        path="/"
-    )
+    response.set_cookie(key="email", value=email, secure=False, path="/")
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -278,11 +316,10 @@ async def login(request: Request) -> RedirectResponse:
 
 
 @async_timed("logout")
-async def logout(request: Request) -> JSONResponse:
-    response = JSONResponse({"message": "Logged out successfully"})
+async def logout(request: Request) -> RedirectResponse:
+    response = RedirectResponse("/", status_code=303)
     response.delete_cookie(key="access_token")
     response.delete_cookie(key="email")
-    response.headers["HX-Redirect"] = "/"
     return response
 
 
@@ -335,7 +372,7 @@ routes = [
     Route("/balance", endpoint=balance, methods=["GET"]),
     Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"]),
-    Route("/logout", logout, methods=["POST"])
+    Route("/logout", logout, methods=["POST"]),
 ]
 
 
