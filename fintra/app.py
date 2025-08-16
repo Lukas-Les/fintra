@@ -6,8 +6,6 @@ import json
 import functools
 
 from typing import Any, Awaitable, Callable, ParamSpec, cast, TypeVar
-from urllib.parse import parse_qs
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
