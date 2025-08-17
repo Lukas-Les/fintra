@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from argon2 import PasswordHasher
+
 from jose import jwt, exceptions
+from jinja2 import Environment, FileSystemLoader
 from prometheus_client import start_http_server, Summary
 from starlette.applications import Starlette
 from starlette.authentication import (
@@ -26,6 +28,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
+from starlette.templating import _TemplateResponse, Jinja2Templates
 
 from fintra import db
 
@@ -183,6 +186,14 @@ async def health_check(request: Request):
         await cursor.fetchone()
 
         return Response("hello there")
+
+
+env = Environment(loader=FileSystemLoader("templates"))
+templates = Jinja2Templates(env=env)
+
+
+async def jinja_test(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @async_timed("create-user")
@@ -371,6 +382,7 @@ routes = [
     Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"]),
     Route("/logout", logout, methods=["POST"]),
+    Route("/j", endpoint=jinja_test, methods=["GET"]),
 ]
 
 
