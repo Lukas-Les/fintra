@@ -179,7 +179,7 @@ def async_timed(endpoint: str) -> Callable[[FuncType], FuncType]:
 
 
 @async_timed("health")
-async def health_check(request: Request):
+async def health_check(_: Request):
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         await cursor.execute("SELECT 1;")
@@ -192,9 +192,19 @@ env = Environment(loader=FileSystemLoader("templates"))
 templates = Jinja2Templates(env=env)
 
 
-async def jinja_test(request: Request):
+@async_timed("index")
+async def index(request: Request) -> _TemplateResponse:
     return templates.TemplateResponse(request=request, name="index.html")
 
+
+@async_timed("join")
+async def join(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="join.html")
+
+
+@async_timed("dashboard")
+async def dashboard(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="dashboard.html")
 
 @async_timed("create-user")
 async def create_user(request: Request) -> RedirectResponse:
@@ -270,7 +280,12 @@ class TokenAuthBackend(AuthenticationBackend):
 
 
 @async_timed("login")
-async def login(request: Request) -> RedirectResponse:
+async def login(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="login.html")
+
+
+@async_timed("authorize")
+async def authorize(request: Request) -> RedirectResponse:
     form = await request.form()
     password = form.get("password")
     if not isinstance(password, str):
@@ -377,12 +392,15 @@ middleware = [Middleware(AuthenticationMiddleware, backend=TokenAuthBackend())]
 
 routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
+    Route("/authorize", endpoint=authorize, methods=["POST"]),
+    Route("/join", endpoint=join, methods=["GET"]),
+    Route("/login", endpoint=login, methods=["GET"]),
+    Route("/dashboard", endpoint=dashboard, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
-    Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"]),
     Route("/logout", logout, methods=["POST"]),
-    Route("/j", endpoint=jinja_test, methods=["GET"]),
+    Route("/", endpoint=index, methods=["GET"]),
 ]
 
 

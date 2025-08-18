@@ -1,0 +1,29 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-100">
+  <form action="/authorize" method="POST">
+    <h1 class="h3 mb-3 fw-normal">Please log in</h1>
+    <div class="form-floating">
+      <input
+        type="email"
+        placeholder="name@example.com"
+        name="email"
+        id="floatingEmail"
+      />
+      <label for="floatingEmail">Email address</label>
+      <nordpass-icon></nordpass-icon>
+    </div>
+    <div class="form-floating">
+      <input
+        type="password"
+        class="form-control"
+        id="floatingPassword"
+        placeholder="Password"
+        name="password"
+      />
+      <label for="floatingPassword">Password</label>
+      <nordpass-icon></nordpass-icon>
+    </div>
+    <button class="btn btn-primary w-100 py-2" type="submit">Sign in</button>
+  </form>
+</div>
+{% endblock %}
