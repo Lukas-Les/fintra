@@ -59,14 +59,14 @@ async def test_create_user_short_password(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_login_success(async_client: AsyncClient):
+async def test_authorization_success(async_client: AsyncClient):
     """Tests successful login for an existing user."""
     email = "loginuser@example.com"
     password = "password123"
     await async_client.post("/create-user", data={"email": email, "password": password})
     # Now, log in
     response = await async_client.post(
-        "/login", data={"email": email, "password": password}
+        "/authorize", data={"email": email, "password": password}
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/dashboard"
@@ -74,23 +74,23 @@ async def test_login_success(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password(async_client: AsyncClient):
+async def test_authorize_wrong_password(async_client: AsyncClient):
     """Tests login with an incorrect password."""
     email = "wrongpass@example.com"
     password = "password123"
     await async_client.post("/create-user", data={"email": email, "password": password})
     with pytest.raises(VerifyMismatchError):
         await async_client.post(
-            "/login", data={"email": email, "password": "wrongpassword"}
+            "/authorize", data={"email": email, "password": "wrongpassword"}
         )
 
 
 @pytest.mark.asyncio
-async def test_login_nonexistent_user(async_client: AsyncClient):
+async def test_authorize_nonexistent_user(async_client: AsyncClient):
     """Tests login for a user that does not exist."""
     with pytest.raises(Exception):
         await async_client.post(
-            "/login", data={"email": "nouser@example.com", "password": "password"}
+            "/authorize", data={"email": "nouser@example.com", "password": "password"}
         )
 
 
@@ -125,7 +125,7 @@ async def test_transaction_and_balance_authenticated(authenticated_client):
     # Post an income transaction
     income_data = {
         "amount": 1500.00,
-        "type": "income",
+       "type": "income",
         "category": "Salary",
         "description": "Paycheck",
         "party": "Employer",
