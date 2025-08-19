@@ -55,7 +55,7 @@ async def authenticated_client(async_client: AsyncClient):
 
     # Login to get the access token cookie
     response = await async_client.post(
-        "/login", data={"email": user_email, "password": user_password}
+        "/authorize", data={"email": user_email, "password": user_password}
     )
     assert response.status_code == 303
     assert "access_token" in async_client.cookies

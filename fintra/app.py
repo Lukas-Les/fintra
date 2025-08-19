@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from argon2 import PasswordHasher
+
 from jose import jwt, exceptions
+from jinja2 import Environment, FileSystemLoader
 from prometheus_client import start_http_server, Summary
 from starlette.applications import Starlette
 from starlette.authentication import (
@@ -26,6 +28,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
+from starlette.templating import _TemplateResponse, Jinja2Templates
 
 from fintra import db
 
@@ -176,7 +179,7 @@ def async_timed(endpoint: str) -> Callable[[FuncType], FuncType]:
 
 
 @async_timed("health")
-async def health_check(request: Request):
+async def health_check(_: Request):
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         await cursor.execute("SELECT 1;")
@@ -184,6 +187,25 @@ async def health_check(request: Request):
 
         return Response("hello there")
 
+
+env = Environment(loader=FileSystemLoader("templates"))
+templates = Jinja2Templates(env=env)
+
+
+@async_timed("index")
+async def index(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="index.html")
+
+
+@async_timed("join")
+async def join(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="join.html")
+
+
+@async_timed("dashboard")
+@requires("authenticated")
+async def dashboard(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="dashboard.html")
 
 @async_timed("create-user")
 async def create_user(request: Request) -> RedirectResponse:
@@ -259,7 +281,12 @@ class TokenAuthBackend(AuthenticationBackend):
 
 
 @async_timed("login")
-async def login(request: Request) -> RedirectResponse:
+async def login(request: Request) -> _TemplateResponse:
+    return templates.TemplateResponse(request=request, name="login.html")
+
+
+@async_timed("authorize")
+async def authorize(request: Request) -> RedirectResponse:
     form = await request.form()
     password = form.get("password")
     if not isinstance(password, str):
@@ -314,6 +341,7 @@ async def login(request: Request) -> RedirectResponse:
 
 
 @async_timed("logout")
+@requires("authenticated")
 async def logout(request: Request) -> RedirectResponse:
     response = RedirectResponse("/", status_code=303)
     response.delete_cookie(key="access_token")
@@ -366,11 +394,15 @@ middleware = [Middleware(AuthenticationMiddleware, backend=TokenAuthBackend())]
 
 routes = [
     Route("/health", endpoint=health_check, methods=["GET"]),
+    Route("/authorize", endpoint=authorize, methods=["POST"]),
+    Route("/join", endpoint=join, methods=["GET"]),
+    Route("/login", endpoint=login, methods=["GET"]),
+    Route("/dashboard", endpoint=dashboard, methods=["GET"]),
     Route("/transaction", endpoint=transaction, methods=["POST"]),
     Route("/balance", endpoint=balance, methods=["GET"]),
-    Route("/login", endpoint=login, methods=["POST"]),
     Route("/create-user", create_user, methods=["POST"]),
     Route("/logout", logout, methods=["POST"]),
+    Route("/", endpoint=index, methods=["GET"]),
 ]
 
 
