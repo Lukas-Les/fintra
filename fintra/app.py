@@ -203,6 +203,7 @@ async def join(request: Request) -> _TemplateResponse:
 
 
 @async_timed("dashboard")
+@requires("authenticated")
 async def dashboard(request: Request) -> _TemplateResponse:
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
@@ -340,6 +341,7 @@ async def authorize(request: Request) -> RedirectResponse:
 
 
 @async_timed("logout")
+@requires("authenticated")
 async def logout(request: Request) -> RedirectResponse:
     response = RedirectResponse("/", status_code=303)
     response.delete_cookie(key="access_token")
