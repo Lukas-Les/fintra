@@ -1,7 +1,5 @@
 # Fintra
 
-Fintra is a backend service for tracking personal finances. It provides a simple API for recording income and expense transactions and calculating account balance.
-
 ## Features
 
 - Record income and expense transactions
@@ -9,12 +7,6 @@ Fintra is a backend service for tracking personal finances. It provides a simple
 - Query current balance
 - Built-in monitoring with Prometheus and Grafana
 - Database migrations with yoyo-migrations
-
-## API Endpoints
-
-- `POST /transaction` - Record a new transaction
-- `GET /balance` - Get current account balance
-- `GET /health` - Health check endpoint
 
 ## How to Run
 
@@ -35,7 +27,7 @@ This will start:
 
 ### Accessing the Application
 
-- API: http://localhost:8000
+- app: http://localhost:8000
 - Grafana: http://localhost:3000
 - Prometheus: http://localhost:9090
 
@@ -81,22 +73,6 @@ docker compose -f tests/compose.yaml up -d
 ```
 
 ## Development
-
-### Project Structure
-
-- `fintra/` - Main application code
-- `alembic/` - Database migration scripts
-- `tests/` - Test files
-- `grafana/`, `prometheus/` - Monitoring configuration
-
-### Adding New Dependencies
-
-While in your virtual environment:
-
-```bash
-pip install <new dependency>
-pip freeze > requirements/main.txt  # or the appropriate requirements file
-```
 
 ### Working with Database Migrations
 
