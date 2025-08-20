@@ -10,11 +10,17 @@ steps = [
     step(
         """
         ALTER TABLE users
-        ADD COLUMN salt VARCHAR(50) NOT NULL DEFAULT '';
+        ADD COLUMN salt BYTEA DEFAULT
+            decode(
+                substring(
+                    md5(random()::text || clock_timestamp()::text) for 8
+                ),
+            'hex'
+        );
         """,
         """
         ALTER TABLE users
         DROP COLUMN salt;
         """,
-    )
+    ),
 ]

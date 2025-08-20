@@ -47,6 +47,10 @@ EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
 ph = PasswordHasher()
 
 
+def generate_salt() -> bytes:
+    return os.urandom(16)
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
@@ -207,6 +211,7 @@ async def join(request: Request) -> _TemplateResponse:
 async def dashboard(request: Request) -> _TemplateResponse:
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
+
 @async_timed("create-user")
 async def create_user(request: Request) -> RedirectResponse:
     form = await request.form()
@@ -219,7 +224,8 @@ async def create_user(request: Request) -> RedirectResponse:
     password = str(form.get("password", ""))
     if len(password) < 5:
         raise ValueError("password is too short")
-    hashed = ph.hash(password=password, salt=SALT)
+    salt = generate_salt()
+    hashed = ph.hash(password=password, salt=salt)
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
@@ -230,10 +236,10 @@ async def create_user(request: Request) -> RedirectResponse:
         if await cursor.fetchone():
             raise ValueError("email already exists")
         query = """
-            INSERT INTO users (email, password)
-            VALUES (%(email)s, %(password)s);
+            INSERT INTO users (email, password, salt)
+            VALUES (%(email)s, %(password)s, %(salt)s);
         """
-        await cursor.execute(query=query, params={"email": email, "password": hashed})
+        await cursor.execute(query=query, params={"email": email, "password": hashed, "salt": salt})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
@@ -301,26 +307,28 @@ async def authorize(request: Request) -> RedirectResponse:
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
-            SELECT password FROM users
+            SELECT password, salt FROM users
             WHERE email = %(email)s;
         """
         await cursor.execute(query, params={"email": email})
         result = await cursor.fetchone()
         if not result:
             raise Exception("user does not exist")
-        hashed = result[0]
+        hashed, salt = result
         ph.verify(hashed, password=password)
         if not ph.check_needs_rehash(hashed):
-            new_hash = ph.hash(password=password, salt=SALT)
+            new_salt = generate_salt()
+            new_hash = ph.hash(password=password, salt=new_salt)
             query = """
                 UPDATE users
                 SET
-                    password = %(password)s
+                    password = %(password)s,
+                    salt = %(salt)s
                 WHERE email = %(email)s;
 
             """
             await cursor.execute(
-                query=query, params={"email": email, "password": new_hash}
+                query=query, params={"email": email, "password": new_hash, "salt": new_salt}
             )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
