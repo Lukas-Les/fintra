@@ -158,6 +158,9 @@
     if (submitTransactionForm) {
       const formData = new FormData(submitTransactionForm);
       const transactionData = Object.fromEntries(formData.entries());
+      const actionDisplay = document.getElementById(
+      "action-display",
+    )
 
       fetch("/transaction", {
         method: "POST",
@@ -170,13 +173,17 @@
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-          return response.json();
-        })
-        .then((data) => {
-          console.log("Transaction submitted successfully:", data);
+          console.log("Transaction submitted successfully");
+          submitTransactionForm.reset(); // Clear the form
+          if (actionDisplay) {
+                actionDisplay.innerHTML = `<div class="alert alert-success" role="alert">Transaction submitted successfully!</div>`;
+            }
         })
         .catch((error) => {
           console.error("Error submitting transaction:", error);
+          if (actionDisplay) {
+                actionDisplay.innerHTML = `<div class="alert alert-danger" role="alert">Error: ${error.message || 'Failed to submit transaction.'}</div>`;
+            }
         });
     } else {
       console.log("Form not found.");
