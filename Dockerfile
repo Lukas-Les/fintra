@@ -17,6 +17,7 @@ RUN uv sync --locked
 COPY fintra/ /app/fintra/
 COPY .env /app/.env
 COPY templates/ /app/templates/
+COPY static/ /app/static/
 
 EXPOSE 8000 8001
 

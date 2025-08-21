@@ -27,7 +27,8 @@ from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.requests import Request
-from starlette.routing import Route
+from starlette.routing import Route, Mount
+from starlette.staticfiles import StaticFiles
 from starlette.templating import _TemplateResponse, Jinja2Templates
 
 from fintra import db
@@ -411,6 +412,7 @@ routes = [
     Route("/create-user", create_user, methods=["POST"]),
     Route("/logout", logout, methods=["POST"]),
     Route("/", endpoint=index, methods=["GET"]),
+    Mount("/static", app=StaticFiles(directory="static"), name="static")
 ]
 
 
