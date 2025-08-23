@@ -41,7 +41,6 @@ REQUEST_TIME = Summary(
 
 SECRET_KEY = "random"
 ALGORITHM = "HS256"
-SALT = os.environ["SALT"].encode()
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
 EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
 
@@ -225,8 +224,7 @@ async def create_user(request: Request) -> RedirectResponse:
     password = str(form.get("password", ""))
     if len(password) < 5:
         raise ValueError("password is too short")
-    salt = generate_salt()
-    hashed = ph.hash(password=password, salt=salt)
+    hashed = ph.hash(password=password, salt=generate_salt())
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
@@ -237,10 +235,10 @@ async def create_user(request: Request) -> RedirectResponse:
         if await cursor.fetchone():
             raise ValueError("email already exists")
         query = """
-            INSERT INTO users (email, password, salt)
-            VALUES (%(email)s, %(password)s, %(salt)s);
+            INSERT INTO users (email, password)
+            VALUES (%(email)s, %(password)s);
         """
-        await cursor.execute(query=query, params={"email": email, "password": hashed, "salt": salt})
+        await cursor.execute(query=query, params={"email": email, "password": hashed})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": email}, expires_delta=access_token_expires
@@ -308,28 +306,27 @@ async def authorize(request: Request) -> RedirectResponse:
     conn = await db.create_or_return_connection()
     async with conn.cursor() as cursor:
         query = """
-            SELECT password, salt FROM users
+            SELECT password FROM users
             WHERE email = %(email)s;
         """
         await cursor.execute(query, params={"email": email})
         result = await cursor.fetchone()
         if not result:
             raise Exception("user does not exist")
-        hashed, salt = result
+        hashed = result[0]
         ph.verify(hashed, password=password)
-        if not ph.check_needs_rehash(hashed):
+        if ph.check_needs_rehash(hashed):
             new_salt = generate_salt()
             new_hash = ph.hash(password=password, salt=new_salt)
             query = """
                 UPDATE users
                 SET
                     password = %(password)s,
-                    salt = %(salt)s
                 WHERE email = %(email)s;
 
             """
             await cursor.execute(
-                query=query, params={"email": email, "password": new_hash, "salt": new_salt}
+                query=query, params={"email": email, "password": new_hash}
             )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
