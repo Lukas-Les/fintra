@@ -39,7 +39,7 @@ REQUEST_TIME = Summary(
 )
 
 
-SECRET_KEY = "random"
+SECRET_KEY = os.environ["SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token valid for 60 minutes
 EMAIL_PATTERN = re.compile(r"^[\w.-]+@([\w-]+\.)+[\w-]{2,}$")
