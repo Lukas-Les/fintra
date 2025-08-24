@@ -252,6 +252,7 @@ async def create_user(request: Request) -> RedirectResponse:
         secure=False,  # Set to True in production if using HTTPS
         max_age=int(access_token_expires.total_seconds()),
         path="/",
+        samesite="lax",
     )
     response.set_cookie(key="email", value=email, secure=False, path="/")
     return response
@@ -342,6 +343,7 @@ async def authorize(request: Request) -> RedirectResponse:
         secure=False,  # Set to True in production if using HTTPS
         max_age=int(access_token_expires.total_seconds()),
         path="/",
+        samesite="lax",
     )
     return response
 
