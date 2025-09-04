@@ -42,6 +42,10 @@ LOGGING_CONFIG: dict[str, Any] = {
         "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
+        "root": {
+            "handlers": ["default"],
+            "level": os.getenv("LOG_LEVEL", "INFO").upper(),
+        },
     },
 }
 
@@ -51,5 +55,5 @@ if __name__ == "__main__":
         app=app,
         host="0.0.0.0",
         log_config=LOGGING_CONFIG,
-        log_level=os.getenv("LOG_LEVEL") or "warning",
+        log_level=os.getenv("LOG_LEVEL", "INFO").lower(),
     )

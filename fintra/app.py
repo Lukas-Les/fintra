@@ -2,6 +2,7 @@ import os
 import re
 import enum
 import json
+import logging
 
 import functools
 
@@ -33,6 +34,8 @@ from starlette.templating import _TemplateResponse, Jinja2Templates
 
 from fintra import db
 
+logger = logging.getLogger(__name__)
+logger.info("hello")
 
 REQUEST_TIME = Summary(
     "request_processing_seconds", "Request processing duratino", ["endpoint"]

@@ -4,8 +4,6 @@ services:
   app:
     build: .
     container_name: app-backend
-    environment:
-      LOG_LEVEL: warning
     ports:
       - "8000:8000"
       - "8001:8001"
